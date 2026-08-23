@@ -8,7 +8,6 @@
         local Vision = loadstring(game:HttpGet(".../Vision.lua"))()
         local window = Vision.Window({ title = "VISION", keybind = Enum.KeyCode.Insert })
         local tab = window:Tab("Combat", { icon = "crosshair" })
-        -- Optional: logo = "https://example.com/logo.png"
         local group = tab:Group("Aim", { side = "left" })
         group.Toggle({ text = "Enabled", flag = "aim_enabled" })
         group.Slider({ text = "FOV", min = 1, max = 180, default = 90, step = 1 })
@@ -82,8 +81,9 @@ local function protectGui(gui)
     end)
 end
 
--- Named icons remain optional. The Vision logo itself is local and never needs a download.
+-- Named icons remain optional. The logo is cached locally after its first download.
 local ICON_URL = "https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/icons.lua"
+local DEFAULT_LOGO_URL = "https://raw.githubusercontent.com/Flameware1/Vision/main/Vision.png"
 local iconMap
 
 local function loadIconMap()
@@ -181,6 +181,11 @@ local FOOTER_H = 30
 local MARGIN = 16
 local COL_GAP = 14
 local COL_W = math.floor((WIN_W - MARGIN * 2 - COL_GAP) / 2)
+local TOPBAR_SEARCH_X = MARGIN + 54
+local TOPBAR_SEARCH_BOX_X = MARGIN + 73
+local TOPBAR_SEARCH_W = 112
+local TOPBAR_TITLE_X = MARGIN + 194
+local TOPBAR_TABS_X = MARGIN + 292
 local HEAD_H = 28
 local TEXT = 13
 
@@ -333,15 +338,13 @@ local function loadLogoAsset(url)
         return nil
     end
     ensureFolder()
-    if not isfile(LOGO_FILE) then
-        local downloaded, imageData = pcall(function()
-            return game:HttpGet(url)
+    local downloaded, imageData = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if downloaded and type(imageData) == "string" and #imageData > 0 then
+        pcall(function()
+            writefile(LOGO_FILE, imageData)
         end)
-        if downloaded and type(imageData) == "string" and #imageData > 0 then
-            pcall(function()
-                writefile(LOGO_FILE, imageData)
-            end)
-        end
     end
     if not isfile(LOGO_FILE) then
         return nil
@@ -392,6 +395,7 @@ function Vision.Window(options)
 
     local keybindCancel
     local controlListening = false
+    local setMenuVisible
     local attachElements
     local openHuePopup
     local popupCleanup
@@ -461,16 +465,7 @@ function Vision.Window(options)
         BorderSizePixel = 0,
         Parent = topbar,
     })
-    make("Frame", {
-        Name = "TopDivider",
-        Position = UDim2.new(0, MARGIN, 1, -1),
-        Size = UDim2.new(1, -MARGIN * 2, 0, 1),
-        BackgroundColor3 = Color3.fromRGB(31, 43, 56),
-        BorderSizePixel = 0,
-        Parent = win,
-    })
-
-    -- Local Vision mark: a blue eye made from two angled bars and a bright pupil.
+    -- Local fallback mark: the downloaded PNG is preferred when the executor supports custom assets.
     local logo = make("Frame", {
         Name = "VisionLogo",
         AnchorPoint = Vector2.new(0, 0.5),
@@ -514,11 +509,21 @@ function Vision.Window(options)
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         ScaleType = Enum.ScaleType.Fit,
+        ImageTransparency = 0,
         Visible = false,
         ZIndex = 4,
         Parent = logo,
     })
-    local logoAsset = loadLogoAsset(textValue(options.logo, ""))
+    local logoHitbox = make("TextButton", {
+        Name = "LogoButton",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+        ZIndex = 5,
+        Parent = logo,
+    })
+    local logoAsset = loadLogoAsset(textValue(options.logo, DEFAULT_LOGO_URL))
     if logoAsset then
         logoImage.Image = logoAsset
         logoImage.Visible = true
@@ -527,19 +532,69 @@ function Vision.Window(options)
         logoPupil.Visible = false
     end
 
-    make("Frame", {
-        Name = "LogoDivider",
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, MARGIN + 45, 0.5, 0),
-        Size = UDim2.new(0, 1, 0, 30),
-        BackgroundColor3 = Color3.fromRGB(35, 49, 64),
+    local launcher = make("ImageButton", {
+        Name = "Launcher",
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -24, 1, -24),
+        Size = UDim2.new(0, 42, 0, 42),
+        BackgroundColor3 = Theme.ChromeBg,
+        BackgroundTransparency = 0.04,
         BorderSizePixel = 0,
-        Parent = topbar,
+        Image = logoAsset or "",
+        ImageColor3 = Theme.TextWhite,
+        ScaleType = Enum.ScaleType.Fit,
+        AutoButtonColor = false,
+        Visible = false,
+        ZIndex = 20,
+        Parent = screen,
     })
+    corner(launcher, 10)
+    local launcherStroke = stroke(launcher, Theme.ControlBorder, 0.15, 1)
+    local launcherScale = make("UIScale", { Scale = 1, Parent = launcher })
+    if not logoAsset then
+        launcher.Image = ""
+        make("TextLabel", {
+            Name = "FallbackMark",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            Font = FONT_BOLD,
+            Text = "V",
+            TextSize = 16,
+            TextColor3 = Theme.TextWhite,
+            ZIndex = 21,
+            Parent = launcher,
+        })
+    end
+
+    logoHitbox.MouseEnter:Connect(function()
+        tween(logoImage, { ImageTransparency = logoAsset and 0.08 or 1 }, 0.12)
+        tween(logoLeft, { BackgroundColor3 = Theme.AccentBright }, 0.12)
+        tween(logoRight, { BackgroundColor3 = Theme.AccentBright }, 0.12)
+        tween(logoPupil, { BackgroundColor3 = Theme.TextWhite }, 0.12)
+    end)
+    logoHitbox.MouseLeave:Connect(function()
+        tween(logoImage, { ImageTransparency = 0 }, 0.16)
+        tween(logoLeft, { BackgroundColor3 = Theme.Accent }, 0.16)
+        tween(logoRight, { BackgroundColor3 = Theme.Accent }, 0.16)
+    end)
+    launcher.MouseEnter:Connect(function()
+        tween(launcherScale, { Scale = 1.08 }, 0.14, Enum.EasingStyle.Quint)
+        tween(launcherStroke, { Color = Theme.AccentBright, Transparency = 0 }, 0.14)
+    end)
+    launcher.MouseLeave:Connect(function()
+        tween(launcherScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
+        tween(launcherStroke, { Color = Theme.ControlBorder, Transparency = 0.15 }, 0.18)
+    end)
+    logoHitbox.MouseButton1Click:Connect(function()
+        setMenuVisible(false)
+    end)
+    launcher.MouseButton1Click:Connect(function()
+        setMenuVisible(true)
+    end)
 
     local searchIcon = make("ImageLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, MARGIN + 58, 0.5, 0),
+        Position = UDim2.new(0, TOPBAR_SEARCH_X, 0.5, 0),
         Size = UDim2.new(0, 14, 0, 14),
         BackgroundTransparency = 1,
         ImageColor3 = Theme.TextDim,
@@ -551,8 +606,8 @@ function Vision.Window(options)
     local searchBox = make("TextBox", {
         Name = "SearchBox",
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, MARGIN + 78, 0.5, 0),
-        Size = UDim2.new(0, 96, 0, 24),
+        Position = UDim2.new(0, TOPBAR_SEARCH_BOX_X, 0.5, 0),
+        Size = UDim2.new(0, TOPBAR_SEARCH_W, 0, 24),
         BackgroundTransparency = 1,
         Font = FONT,
         Text = "",
@@ -567,8 +622,8 @@ function Vision.Window(options)
     make("TextLabel", {
         Name = "Title",
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, MARGIN + 188, 0.5, 0),
-        Size = UDim2.new(0, 82, 1, 0),
+        Position = UDim2.new(0, TOPBAR_TITLE_X, 0.5, 0),
+        Size = UDim2.new(0, 88, 1, 0),
         BackgroundTransparency = 1,
         Font = FONT_BOLD,
         Text = title,
@@ -595,13 +650,6 @@ function Vision.Window(options)
         Size = UDim2.new(1, 0, 0, FOOTER_H),
         BackgroundTransparency = 1,
         Parent = win,
-    })
-    make("Frame", {
-        Position = UDim2.new(0, MARGIN, 0, 0),
-        Size = UDim2.new(1, -MARGIN * 2, 0, 1),
-        BackgroundColor3 = Color3.fromRGB(31, 43, 56),
-        BorderSizePixel = 0,
-        Parent = footer,
     })
     local footerIcon = make("ImageLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
@@ -796,7 +844,7 @@ function Vision.Window(options)
 
     local tabs = {}
     local activeTab
-    local tabX = MARGIN + 78 + 110
+    local tabX = TOPBAR_TABS_X
     local searchIndex = {}
     local switchGeneration = 0
 
@@ -925,6 +973,10 @@ function Vision.Window(options)
             BackgroundTransparency = 1,
             Parent = topbar,
         })
+        local navScale = make("UIScale", {
+            Scale = 1,
+            Parent = nav,
+        })
         local navIcon = make("ImageLabel", {
             AnchorPoint = Vector2.new(0, 0.5),
             Position = UDim2.new(0, 0, 0.5, 0),
@@ -1007,15 +1059,17 @@ function Vision.Window(options)
             end
         end)
         nav.MouseEnter:Connect(function()
+            tween(navScale, { Scale = 1.04 }, 0.14, Enum.EasingStyle.Quint)
             if activeTab ~= tab then
-                tween(navIcon, { ImageColor3 = Theme.TextMid }, 0.1)
-                tween(navLabel, { TextColor3 = Theme.TextMid }, 0.1)
+                tween(navIcon, { ImageColor3 = Theme.TextMid }, 0.12)
+                tween(navLabel, { TextColor3 = Theme.TextMid }, 0.12)
             end
         end)
         nav.MouseLeave:Connect(function()
+            tween(navScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
             if activeTab ~= tab then
-                tween(navIcon, { ImageColor3 = Theme.TextDim }, 0.1)
-                tween(navLabel, { TextColor3 = Theme.TextDim }, 0.1)
+                tween(navIcon, { ImageColor3 = Theme.TextDim }, 0.16)
+                tween(navLabel, { TextColor3 = Theme.TextDim }, 0.16)
             end
         end)
 
@@ -1047,41 +1101,19 @@ function Vision.Window(options)
             })
             corner(box, 4)
             stroke(box, Color3.fromRGB(29, 42, 56), 0.25)
-            local header = make("Frame", {
+                local header = make("Frame", {
                 Name = "Header",
                 Size = UDim2.new(1, 0, 0, HEAD_H),
-                BackgroundColor3 = Theme.AccentDark,
+                BackgroundColor3 = Theme.AccentDeep,
                 BorderSizePixel = 0,
+                ClipsDescendants = true,
                 Parent = box,
             })
             corner(header, 4)
-            make("Frame", {
-                Position = UDim2.new(0, 0, 1, -4),
-                Size = UDim2.new(1, 0, 0, 4),
-                BackgroundColor3 = Theme.AccentDark,
-                BorderSizePixel = 0,
-                Parent = header,
-            })
-            make("UIGradient", {
-                Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0, Color3.fromRGB(52, 113, 176)),
-                    ColorSequenceKeypoint.new(0.5, Theme.AccentDark),
-                    ColorSequenceKeypoint.new(1, Theme.AccentDeep),
-                }),
-                Rotation = 0,
-                Parent = header,
-            })
-            make("Frame", {
-                Position = UDim2.new(0, 10, 0, 8),
-                Size = UDim2.new(0, 3, 0, 12),
-                BackgroundColor3 = Theme.AccentBright,
-                BorderSizePixel = 0,
-                ZIndex = 3,
-                Parent = header,
-            })
+            local headerStroke = stroke(header, Color3.fromRGB(35, 85, 135), 0.45, 1)
             local headerTitle = make("TextLabel", {
-                Position = UDim2.new(0, 20, 0, 0),
-                Size = UDim2.new(1, -56, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                Size = UDim2.new(1, -24, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT_BOLD,
                 Text = groupName,
@@ -1091,6 +1123,16 @@ function Vision.Window(options)
                 ZIndex = 3,
                 Parent = header,
             })
+            header.MouseEnter:Connect(function()
+                tween(header, { BackgroundColor3 = Theme.AccentDark }, 0.16, Enum.EasingStyle.Quint)
+                tween(headerStroke, { Color = Theme.AccentBright, Transparency = 0.12 }, 0.16)
+                tween(headerTitle, { TextColor3 = Theme.TextWhite }, 0.16)
+            end)
+            header.MouseLeave:Connect(function()
+                tween(header, { BackgroundColor3 = Theme.AccentDeep }, 0.2, Enum.EasingStyle.Quint)
+                tween(headerStroke, { Color = Color3.fromRGB(35, 85, 135), Transparency = 0.45 }, 0.2)
+                tween(headerTitle, { TextColor3 = Theme.TextWhite }, 0.2)
+            end)
             if groupOptions.info then
                 local info = make("TextButton", {
                     AnchorPoint = Vector2.new(1, 0.5),
@@ -1301,9 +1343,18 @@ function Vision.Window(options)
                 if not state then tween(label, { TextColor3 = Theme.TextBright }, 0.1) end
             end)
             row.MouseLeave:Connect(function()
-                if not state then tween(label, { TextColor3 = Theme.TextMid }, 0.1) end
+                if not state then tween(label, { TextColor3 = Theme.TextMid }, 0.16) end
             end)
             if swatch then
+                local swatchStroke = swatch:FindFirstChildOfClass("UIStroke")
+                swatch.MouseEnter:Connect(function()
+                    tween(swatch, { Size = UDim2.new(0, 28, 0, 16) }, 0.12, Enum.EasingStyle.Quint)
+                    if swatchStroke then tween(swatchStroke, { Color = Theme.AccentBright, Transparency = 0 }, 0.12) end
+                end)
+                swatch.MouseLeave:Connect(function()
+                    tween(swatch, { Size = UDim2.new(0, 25, 0, 14) }, 0.16, Enum.EasingStyle.Quint)
+                    if swatchStroke then tween(swatchStroke, { Color = Theme.ControlBorder, Transparency = 0.15 }, 0.16) end
+                end)
                 swatch.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 then
                         openHuePopup(swatch, function() return hue end, function(nextHue)
@@ -1380,6 +1431,16 @@ function Vision.Window(options)
                 keyLabel.Text = "[ " .. keyName(key) .. " ]"
                 if options.flag then Vision.Flags[options.flag] = key and key.Name or "None" end
             end
+            row.MouseEnter:Connect(function()
+                tween(label, { TextColor3 = Theme.TextBright }, 0.12)
+                tween(keyLabel, { TextColor3 = Theme.AccentBright }, 0.12)
+            end)
+            row.MouseLeave:Connect(function()
+                if not listening then
+                    tween(label, { TextColor3 = Theme.TextDim }, 0.16)
+                    tween(keyLabel, { TextColor3 = Theme.TextDim }, 0.16)
+                end
+            end)
             row.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 then
                     if keybindCancel then keybindCancel() end
@@ -1509,6 +1570,16 @@ function Vision.Window(options)
                 fill.Size = UDim2.new(alpha, 0, 1, 0)
                 knob.Position = UDim2.new(alpha, 0, 0.5, 0)
             end
+            row.MouseEnter:Connect(function()
+                tween(label, { TextColor3 = Theme.TextWhite }, 0.12)
+                tween(valueLabel, { TextColor3 = Theme.AccentBright }, 0.12)
+                tween(fill, { BackgroundColor3 = Theme.AccentBright }, 0.12)
+            end)
+            row.MouseLeave:Connect(function()
+                tween(label, { TextColor3 = Theme.TextBright }, 0.16)
+                tween(valueLabel, { TextColor3 = Theme.TextBright }, 0.16)
+                tween(fill, { BackgroundColor3 = Theme.Accent }, 0.16)
+            end)
             local function set(nextValue, silent)
                 nextValue = tonumber(nextValue)
                 if not nextValue then return end
@@ -1727,8 +1798,18 @@ function Vision.Window(options)
                 if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
                 if isOpen then closeOverlay() else openList() end
             end
-            valueButton.InputBegan:Connect(toggleList)
+            valueButton.MouseEnter:Connect(function()
+                tween(valueButton, { BackgroundColor3 = Theme.ControlHover }, 0.12)
+                tween(chevronButton, { BackgroundColor3 = Theme.ControlHover }, 0.12)
+                tween(label, { TextColor3 = Theme.TextWhite }, 0.12)
+            end)
+            valueButton.MouseLeave:Connect(function()
+                tween(valueButton, { BackgroundColor3 = Theme.ControlBg }, 0.16)
+                tween(chevronButton, { BackgroundColor3 = Theme.ControlBg }, 0.16)
+                tween(label, { TextColor3 = Theme.TextBright }, 0.16)
+            end)
             chevronButton.InputBegan:Connect(toggleList)
+            valueButton.InputBegan:Connect(toggleList)
             paint()
             push(true)
             bindFlag(options.flag, function(v)
@@ -1811,6 +1892,15 @@ function Vision.Window(options)
                 if options.flag then Vision.Flags[options.flag] = current() end
                 if not silent and options.callback then task.spawn(options.callback, current()) end
             end
+            local swatchStroke = swatch:FindFirstChildOfClass("UIStroke")
+            swatch.MouseEnter:Connect(function()
+                tween(swatch, { Size = UDim2.new(0, 28, 0, 16) }, 0.12, Enum.EasingStyle.Quint)
+                if swatchStroke then tween(swatchStroke, { Color = Theme.AccentBright, Transparency = 0 }, 0.12) end
+            end)
+            swatch.MouseLeave:Connect(function()
+                tween(swatch, { Size = UDim2.new(0, 25, 0, 14) }, 0.16, Enum.EasingStyle.Quint)
+                if swatchStroke then tween(swatchStroke, { Color = Theme.ControlBorder, Transparency = 0.15 }, 0.16) end
+            end)
             swatch.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 then
                     openHuePopup(swatch, function() return hue end, function(nextHue)
@@ -1853,6 +1943,7 @@ function Vision.Window(options)
             })
             corner(button, 4)
             local buttonStroke = stroke(button, Theme.ControlBorder, 0.25)
+            local buttonScale = make("UIScale", { Scale = 1, Parent = button })
             local label = make("TextLabel", {
                 Size = UDim2.new(1, 0, 1, 0),
                 BackgroundTransparency = 1,
@@ -1864,12 +1955,14 @@ function Vision.Window(options)
             })
             registerSearch(textValue(options.text, "Button"), row)
             button.MouseEnter:Connect(function()
-                tween(button, { BackgroundColor3 = Theme.ControlHover }, 0.12)
-                tween(buttonStroke, { Color = Theme.Accent, Transparency = 0.1 }, 0.12)
+                tween(buttonScale, { Scale = 1.015 }, 0.14, Enum.EasingStyle.Quint)
+                tween(button, { BackgroundColor3 = Theme.ControlHover }, 0.14, Enum.EasingStyle.Quint)
+                tween(buttonStroke, { Color = Theme.AccentBright, Transparency = 0.05 }, 0.14)
             end)
             button.MouseLeave:Connect(function()
-                tween(button, { BackgroundColor3 = Theme.ControlBg }, 0.15)
-                tween(buttonStroke, { Color = Theme.ControlBorder, Transparency = 0.25 }, 0.15)
+                tween(buttonScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
+                tween(button, { BackgroundColor3 = Theme.ControlBg }, 0.2, Enum.EasingStyle.Quint)
+                tween(buttonStroke, { Color = Theme.ControlBorder, Transparency = 0.25 }, 0.2)
             end)
             button.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -1927,6 +2020,14 @@ function Vision.Window(options)
                 if options.flag then Vision.Flags[options.flag] = input.Text end
                 if not silent and options.callback then task.spawn(options.callback, input.Text, false) end
             end
+            input.MouseEnter:Connect(function()
+                tween(inputStroke, { Color = Theme.AccentBright, Transparency = 0.1 }, 0.12)
+            end)
+            input.MouseLeave:Connect(function()
+                if not input:IsFocused() then
+                    tween(inputStroke, { Color = Theme.ControlBorder, Transparency = 0.25 }, 0.16)
+                end
+            end)
             input.Focused:Connect(function()
                 tween(inputStroke, { Color = Theme.Accent, Transparency = 0.05 }, 0.1)
             end)
@@ -2157,11 +2258,12 @@ function Vision.Window(options)
     local menuVisible = true
     local fadeCache
     local fadeLock = 0
-    local function setMenuVisible(visible)
+    setMenuVisible = function(visible)
         visible = visible == true
         if visible == menuVisible or os.clock() < fadeLock then return end
         fadeLock = os.clock() + 0.2
         menuVisible = visible
+        launcher.Visible = not visible
         if not visible then
             closeOverlay()
             hideTooltip()
