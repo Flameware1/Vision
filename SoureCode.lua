@@ -8,6 +8,7 @@
         local Vision = loadstring(game:HttpGet(".../Vision.lua"))()
         local window = Vision.Window({ title = "VISION", keybind = Enum.KeyCode.Insert })
         local tab = window:Tab("Combat", { icon = "crosshair" })
+        -- Optional: logo = "https://example.com/logo.png"
         local group = tab:Group("Aim", { side = "left" })
         group.Toggle({ text = "Enabled", flag = "aim_enabled" })
         group.Slider({ text = "FOV", min = 1, max = 180, default = 90, step = 1 })
@@ -111,13 +112,13 @@ local function resolveIcon(icon)
         return nil
     end
     if type(icon) == "number" then
-        return { Image = "rbxassetid://" .. icon }
+        return { Image = "rbxassetid://" .. tostring(icon) }
     end
     if type(icon) ~= "string" then
         return nil
     end
     if string.match(icon, "^%d+$") then
-        return { Image = "rbxassetid://" .. icon }
+        return { Image = "rbxassetid://" .. tostring(icon) }
     end
     if string.sub(icon, 1, 13) == "rbxassetid://" or string.sub(icon, 1, 4) == "http" then
         return { Image = icon }
@@ -126,11 +127,11 @@ local function resolveIcon(icon)
     if type(map) == "table" then
         local sized = map["48px"] or map
         local entry = sized and sized[string.lower(icon)]
-        if entry then
+        if type(entry) == "table" and entry[1] ~= nil and type(entry[2]) == "table" and type(entry[3]) == "table" then
             return {
-                Image = "rbxassetid://" .. entry[1],
-                ImageRectSize = Vector2.new(entry[2][1], entry[2][2]),
-                ImageRectOffset = Vector2.new(entry[3][1], entry[3][2]),
+                Image = "rbxassetid://" .. tostring(entry[1]),
+                ImageRectSize = Vector2.new(tonumber(entry[2][1]) or 0, tonumber(entry[2][2]) or 0),
+                ImageRectOffset = Vector2.new(tonumber(entry[3][1]) or 0, tonumber(entry[3][2]) or 0),
             }
         end
     end
@@ -254,6 +255,46 @@ local function keyName(keyCode)
 end
 
 local CONFIG_FOLDER = "Vision"
+local LOGO_FILE = CONFIG_FOLDER .. "/logo.png"
+
+-- Converts localized/config values to display text without assuming a language key.
+local function textValue(value, fallback)
+    if value == nil then
+        return fallback or ""
+    end
+    if type(value) == "string" or type(value) == "number" then
+        return tostring(value)
+    end
+    if type(value) ~= "table" then
+        return fallback or ""
+    end
+    for _, key in ipairs({ "text", "Text", "label", "Label", "name", "Name", "value", "Value", "default" }) do
+        if value[key] ~= nil then
+            local result = textValue(value[key], nil)
+            if result ~= "" then
+                return result
+            end
+        end
+    end
+    if value[1] ~= nil then
+        local result = textValue(value[1], nil)
+        if result ~= "" then
+            return result
+        end
+    end
+    for _, item in pairs(value) do
+        local result = textValue(item, nil)
+        if result ~= "" then
+            return result
+        end
+    end
+    return fallback or ""
+end
+
+local function objectName(value, fallback)
+    local result = string.gsub(textValue(value, fallback or "Item"), "[^%w_%-]", "_")
+    return result == "" and (fallback or "Item") or result
+end
 
 local function canUseFiles()
     return type(writefile) == "function"
@@ -276,15 +317,55 @@ local function ensureFolder()
 end
 
 local function configName(value)
-    value = tostring(value or "default")
+    value = textValue(value, "default")
     value = string.gsub(value, "[^%w_%-]", "_")
     return value == "" and "default" or value
+end
+
+local function loadLogoAsset(url)
+    if type(url) ~= "string" or url == "" then
+        return nil
+    end
+    if string.sub(url, 1, 13) == "rbxassetid://" then
+        return url
+    end
+    if type(writefile) ~= "function" or type(isfile) ~= "function" then
+        return nil
+    end
+    ensureFolder()
+    if not isfile(LOGO_FILE) then
+        local downloaded, imageData = pcall(function()
+            return game:HttpGet(url)
+        end)
+        if downloaded and type(imageData) == "string" and #imageData > 0 then
+            pcall(function()
+                writefile(LOGO_FILE, imageData)
+            end)
+        end
+    end
+    if not isfile(LOGO_FILE) then
+        return nil
+    end
+    local loaders = {}
+    if type(getcustomasset) == "function" then
+        loaders[#loaders + 1] = getcustomasset
+    end
+    if type(getsynasset) == "function" then
+        loaders[#loaders + 1] = getsynasset
+    end
+    for _, loader in ipairs(loaders) do
+        local ok, asset = pcall(loader, LOGO_FILE)
+        if ok and type(asset) == "string" and asset ~= "" then
+            return asset
+        end
+    end
+    return nil
 end
 
 function Vision.Window(options)
     options = options or {}
     local self = {}
-    local title = options.title or "VISION"
+    local title = textValue(options.title, "VISION")
     local menuKey = options.keybind or Enum.KeyCode.Insert
 
     if options.accent and typeof(options.accent) == "Color3" then
@@ -428,6 +509,23 @@ function Vision.Window(options)
     })
     corner(logoPupil, 5)
     stroke(logoPupil, Theme.AccentBright, 0, 1)
+    local logoImage = make("ImageLabel", {
+        Name = "LogoImage",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        ScaleType = Enum.ScaleType.Fit,
+        Visible = false,
+        ZIndex = 4,
+        Parent = logo,
+    })
+    local logoAsset = loadLogoAsset(textValue(options.logo, ""))
+    if logoAsset then
+        logoImage.Image = logoAsset
+        logoImage.Visible = true
+        logoLeft.Visible = false
+        logoRight.Visible = false
+        logoPupil.Visible = false
+    end
 
     make("Frame", {
         Name = "LogoDivider",
@@ -464,6 +562,20 @@ function Vision.Window(options)
         TextColor3 = Theme.TextBright,
         TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false,
+        Parent = topbar,
+    })
+    make("TextLabel", {
+        Name = "Title",
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, MARGIN + 188, 0.5, 0),
+        Size = UDim2.new(0, 82, 1, 0),
+        BackgroundTransparency = 1,
+        Font = FONT_BOLD,
+        Text = title,
+        TextSize = 12,
+        TextColor3 = Theme.TextWhite,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = topbar,
     })
 
@@ -507,7 +619,7 @@ function Vision.Window(options)
         Size = UDim2.new(0, 160, 1, 0),
         BackgroundTransparency = 1,
         Font = FONT,
-        Text = options.footerText or "Vision",
+        Text = textValue(options.footerText, "Vision"),
         TextSize = 12,
         TextColor3 = Theme.TextDim,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -801,9 +913,11 @@ function Vision.Window(options)
 
     function self.Tab(name, tabOptions)
         tabOptions = tabOptions or {}
-        local tab = { Name = name }
+        local tabName = textValue(name, "Tab")
+        local tabId = objectName(tabName, "Tab")
+        local tab = { Name = tabName }
         local nav = make("Frame", {
-            Name = "Nav_" .. name,
+            Name = "Nav_" .. tabId,
             AnchorPoint = Vector2.new(0, 0.5),
             Position = UDim2.new(0, tabX, 0.5, 0),
             Size = UDim2.new(0, 30, 1, 0),
@@ -828,16 +942,16 @@ function Vision.Window(options)
             AutomaticSize = Enum.AutomaticSize.X,
             BackgroundTransparency = 1,
             Font = FONT_MED,
-            Text = name,
+            Text = tabName,
             TextSize = TEXT,
             TextColor3 = Theme.TextDim,
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = nav,
         })
-        tabX = tabX + 21 + math.max(40, #tostring(name) * 7) + 26
+        tabX = tabX + 21 + math.max(40, #tabName * 7) + 26
 
         local page = make("ScrollingFrame", {
-            Name = "Page_" .. name,
+            Name = "Page_" .. tabId,
             Size = UDim2.new(1, 0, 1, 0),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
@@ -907,6 +1021,8 @@ function Vision.Window(options)
 
         function tab.Group(groupName, groupOptions)
             groupOptions = groupOptions or {}
+            groupName = textValue(groupName, "Group")
+            local groupId = objectName(groupName, "Group")
             local group = {}
             local side = groupOptions.side
             if side ~= "left" and side ~= "right" then
@@ -922,7 +1038,7 @@ function Vision.Window(options)
             end
             local parentColumn = side == "left" and left or right
             local box = make("Frame", {
-                Name = "Group_" .. groupName,
+                Name = "Group_" .. groupId,
                 Size = UDim2.new(1, 0, 0, HEAD_H),
                 AutomaticSize = Enum.AutomaticSize.Y,
                 BackgroundColor3 = Theme.PanelBg,
@@ -992,7 +1108,7 @@ function Vision.Window(options)
                 })
                 corner(info, 8)
                 info.MouseEnter:Connect(function()
-                    showTooltip(groupOptions.info, info)
+                    showTooltip(textValue(groupOptions.info, ""), info)
                 end)
                 info.MouseLeave:Connect(hideTooltip)
             end
@@ -1030,7 +1146,7 @@ function Vision.Window(options)
                 searchIndex[#searchIndex + 1] = {
                     tab = tab,
                     group = group,
-                    text = tostring(text),
+                    text = textValue(text, ""),
                     row = row,
                 }
             end
@@ -1073,7 +1189,7 @@ function Vision.Window(options)
                 Size = UDim2.new(1, 0, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT,
-                Text = options.text or "",
+                Text = textValue(options.text, ""),
                 TextSize = TEXT,
                 TextColor3 = Theme.TextMid,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1096,13 +1212,13 @@ function Vision.Window(options)
                 Size = UDim2.new(1, -64, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT_MED,
-                Text = options.text or "Toggle",
+                Text = textValue(options.text, "Toggle"),
                 TextSize = TEXT,
                 TextColor3 = Theme.TextMid,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = row,
             })
-            registerSearch(options.text or "Toggle", row)
+            registerSearch(textValue(options.text, "Toggle"), row)
             local checkBox = make("Frame", {
                 AnchorPoint = Vector2.new(1, 0.5),
                 Position = UDim2.new(1, 0, 0.5, 0),
@@ -1235,13 +1351,13 @@ function Vision.Window(options)
                 Size = UDim2.new(1, -80, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT,
-                Text = options.text or "Keybind",
+                Text = textValue(options.text, "Keybind"),
                 TextSize = TEXT,
                 TextColor3 = Theme.TextDim,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = row,
             })
-            registerSearch(options.text or "Keybind", row)
+            registerSearch(textValue(options.text, "Keybind"), row)
             local keyLabel = make("TextLabel", {
                 AnchorPoint = Vector2.new(1, 0),
                 Position = UDim2.new(1, 0, 0, 0),
@@ -1332,13 +1448,13 @@ function Vision.Window(options)
                 Size = UDim2.new(1, -90, 0, 18),
                 BackgroundTransparency = 1,
                 Font = FONT_MED,
-                Text = options.text or "Slider",
+                Text = textValue(options.text, "Slider"),
                 TextSize = TEXT,
                 TextColor3 = Theme.TextBright,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = row,
             })
-            registerSearch(options.text or "Slider", row)
+            registerSearch(textValue(options.text, "Slider"), row)
             local valueLabel = make("TextLabel", {
                 AnchorPoint = Vector2.new(1, 0),
                 Position = UDim2.new(1, 0, 0, 0),
@@ -1385,7 +1501,7 @@ function Vision.Window(options)
                 else
                     result = tostring(math.floor(valueToFormat + 0.5))
                 end
-                return result .. (options.suffix or "")
+                return result .. textValue(options.suffix, "")
             end
             local function paint()
                 local alpha = max > min and (value - min) / (max - min) or 0
@@ -1451,13 +1567,13 @@ function Vision.Window(options)
                 Size = UDim2.new(1, -130, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT_MED,
-                Text = options.text or "Dropdown",
+                Text = textValue(options.text, "Dropdown"),
                 TextSize = TEXT,
                 TextColor3 = Theme.TextBright,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = row,
             })
-            registerSearch(options.text or "Dropdown", row)
+            registerSearch(textValue(options.text, "Dropdown"), row)
             local valueButton = make("Frame", {
                 AnchorPoint = Vector2.new(1, 0.5),
                 Position = UDim2.new(1, -24, 0.5, 0),
@@ -1508,9 +1624,13 @@ function Vision.Window(options)
             local function paint()
                 if multi then
                     local result = current()
-                    valueLabel.Text = #result > 0 and table.concat(result, ", ") or "None"
+                    local display = {}
+                    for _, item in ipairs(result) do
+                        display[#display + 1] = textValue(item, "")
+                    end
+                    valueLabel.Text = #display > 0 and table.concat(display, ", ") or "None"
                 else
-                    valueLabel.Text = tostring(selected or "None")
+                    valueLabel.Text = textValue(selected, "None")
                 end
             end
             local function push(silent)
@@ -1567,7 +1687,7 @@ function Vision.Window(options)
                             Size = UDim2.new(1, -20, 1, 0),
                             BackgroundTransparency = 1,
                             Font = FONT,
-                            Text = tostring(option),
+                            Text = textValue(option, ""),
                             TextSize = 12,
                             TextColor3 = selectedNow and Theme.AccentBright or Theme.TextMid,
                             TextXAlignment = Enum.TextXAlignment.Left,
@@ -1669,13 +1789,13 @@ function Vision.Window(options)
                 Size = UDim2.new(1, -60, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT_MED,
-                Text = options.text or "Color",
+                Text = textValue(options.text, "Color"),
                 TextSize = TEXT,
                 TextColor3 = Theme.TextBright,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = row,
             })
-            registerSearch(options.text or "Color", row)
+            registerSearch(textValue(options.text, "Color"), row)
             local swatch = make("Frame", {
                 AnchorPoint = Vector2.new(1, 0.5),
                 Position = UDim2.new(1, 0, 0.5, 0),
@@ -1737,12 +1857,12 @@ function Vision.Window(options)
                 Size = UDim2.new(1, 0, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT_MED,
-                Text = options.text or "Button",
+                Text = textValue(options.text, "Button"),
                 TextSize = 12,
                 TextColor3 = Theme.TextBright,
                 Parent = button,
             })
-            registerSearch(options.text or "Button", row)
+            registerSearch(textValue(options.text, "Button"), row)
             button.MouseEnter:Connect(function()
                 tween(button, { BackgroundColor3 = Theme.ControlHover }, 0.12)
                 tween(buttonStroke, { Color = Theme.Accent, Transparency = 0.1 }, 0.12)
@@ -1764,23 +1884,24 @@ function Vision.Window(options)
         function group.Textbox(options)
             options = options or {}
             local row = baseRow(27)
-            if options.text then
+            local text = textValue(options.text, "")
+            if text ~= "" then
                 make("TextLabel", {
                     Size = UDim2.new(1, -130, 1, 0),
                     BackgroundTransparency = 1,
                     Font = FONT_MED,
-                    Text = options.text,
+                    Text = text,
                     TextSize = TEXT,
                     TextColor3 = Theme.TextBright,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = row,
                 })
-                registerSearch(options.text, row)
+                registerSearch(text, row)
             end
             local inputBox = make("Frame", {
                 AnchorPoint = Vector2.new(1, 0.5),
                 Position = UDim2.new(1, 0, 0.5, 0),
-                Size = options.text and UDim2.new(0, 112, 0, 22) or UDim2.new(1, 0, 0, 22),
+                Size = text ~= "" and UDim2.new(0, 112, 0, 22) or UDim2.new(1, 0, 0, 22),
                 BackgroundColor3 = Theme.ControlBg,
                 BorderSizePixel = 0,
                 Parent = row,
@@ -1792,8 +1913,8 @@ function Vision.Window(options)
                 Size = UDim2.new(1, -14, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT,
-                Text = tostring(options.default or ""),
-                PlaceholderText = options.placeholder or "",
+                Text = textValue(options.default, ""),
+                PlaceholderText = textValue(options.placeholder, ""),
                 PlaceholderColor3 = Theme.TextDim,
                 TextSize = 12,
                 TextColor3 = Theme.TextBright,
@@ -1802,7 +1923,7 @@ function Vision.Window(options)
                 Parent = inputBox,
             })
             local function setText(text, silent)
-                input.Text = tostring(text == nil and "" or text)
+                input.Text = textValue(text, "")
                 if options.flag then Vision.Flags[options.flag] = input.Text end
                 if not silent and options.callback then task.spawn(options.callback, input.Text, false) end
             end
@@ -2001,7 +2122,7 @@ function Vision.Window(options)
                     Size = UDim2.new(1, -20, 1, 0),
                     BackgroundTransparency = 1,
                     Font = FONT,
-                    Text = tostring(entry.tab.Name) .. "  >  " .. tostring(entry.group.Name) .. "  >  " .. entry.text,
+                    Text = textValue(entry.tab.Name, "Tab") .. "  >  " .. textValue(entry.group.Name, "Group") .. "  >  " .. textValue(entry.text, ""),
                     TextSize = 12,
                     TextColor3 = Theme.TextMid,
                     TextXAlignment = Enum.TextXAlignment.Left,
