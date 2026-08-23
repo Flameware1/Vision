@@ -438,7 +438,7 @@ function Vision.Window(opts)
 		Size = UDim2.new(0, 160, 1, 0),
 		BackgroundTransparency = 1,
 		Font = FONT,
-		Text = opts.footerText or "English",
+		Text = opts.footerText or ("Vision v" .. Vision.Version),
 		TextSize = 12,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
