@@ -698,7 +698,14 @@ function Vision.Window(opts)
 	end
 
 	function self.Tab(name, topts)
+		if type(name) == "table" then
+			topts = name
+			name = topts.Name or topts.name or topts.title or "Tab"
+		end
 		topts = topts or {}
+		if type(name) ~= "string" then
+			name = tostring(name)
+		end
 		local tab = {}
 		tab.Name = name
 
@@ -720,7 +727,7 @@ function Vision.Window(opts)
 			ScaleType = Enum.ScaleType.Fit,
 			Parent = nav,
 		})
-		applyIcon(navIcon, resolveIcon(topts.icon or "circle"))
+		applyIcon(navIcon, resolveIcon(topts.icon or topts.Icon or "circle"))
 		local navLbl = make("TextLabel", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 21, 0.5, 0),
@@ -806,7 +813,14 @@ function Vision.Window(opts)
 		end)
 
 		function tab.Group(gname, gopts)
+			if type(gname) == "table" then
+				gopts = gname
+				gname = gopts.Name or gopts.name or gopts.title or "Group"
+			end
 			gopts = gopts or {}
+			if type(gname) ~= "string" then
+				gname = tostring(gname)
+			end
 			local group = {}
 
 			local side = gopts.side
