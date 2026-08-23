@@ -10,12 +10,16 @@
         local tab = window:Tab("Combat", { icon = "crosshair" })
         local group = tab:Group("Aim", { side = "left" })
         group.Toggle({ text = "Enabled", flag = "aim_enabled" })
-        group.Slider({ text = "FOV", min = 1, max = 180, default = 90, step = 1 })
-
-    Slider options:
+        group.Slider({ text = "FOV", min = 1, max = 180, default = 90, step = 1 })        Slider options:
         min, max, default, step, decimals, suffix, flag, callback
 
+        Theme options:
+        Window({ theme = "Blue" })
+        window:SetTheme("Rose")
+        window.ThemeManager.List()
+
     All controls return a small object with Row, Get, and Set where useful.
+
 --]]
 
 local Vision = {}
@@ -172,7 +176,186 @@ local Theme = {
     TextMid = Color3.fromRGB(145, 163, 181),
     TextDim = Color3.fromRGB(87, 105, 124),
     Check = Color3.fromRGB(6, 16, 26),
+    Current = "Blue",
 }
+
+local ThemePresets = {
+    Dark = {
+        Accent = Color3.fromRGB(190, 196, 204),
+        AccentBright = Color3.fromRGB(232, 236, 242),
+        AccentDark = Color3.fromRGB(68, 74, 82),
+        AccentDeep = Color3.fromRGB(34, 38, 44),
+        WindowBg = Color3.fromRGB(12, 13, 15),
+        ChromeBg = Color3.fromRGB(7, 8, 10),
+        PanelBg = Color3.fromRGB(19, 20, 23),
+        ControlBg = Color3.fromRGB(28, 30, 34),
+        ControlHover = Color3.fromRGB(38, 41, 46),
+        ControlBorder = Color3.fromRGB(62, 66, 74),
+        Track = Color3.fromRGB(34, 36, 40),
+        TextWhite = Color3.fromRGB(245, 246, 248),
+        TextBright = Color3.fromRGB(218, 221, 226),
+        TextMid = Color3.fromRGB(154, 158, 166),
+        TextDim = Color3.fromRGB(94, 98, 106),
+        Check = Color3.fromRGB(14, 16, 19),
+    },
+    Blue = {
+        Accent = Color3.fromRGB(56, 150, 255),
+        AccentBright = Color3.fromRGB(96, 178, 255),
+        AccentDark = Color3.fromRGB(18, 63, 112),
+        AccentDeep = Color3.fromRGB(10, 35, 66),
+        WindowBg = Color3.fromRGB(10, 13, 17),
+        ChromeBg = Color3.fromRGB(7, 10, 14),
+        PanelBg = Color3.fromRGB(15, 20, 27),
+        ControlBg = Color3.fromRGB(22, 29, 38),
+        ControlHover = Color3.fromRGB(28, 39, 51),
+        ControlBorder = Color3.fromRGB(46, 62, 80),
+        Track = Color3.fromRGB(26, 34, 44),
+        TextWhite = Color3.fromRGB(241, 246, 252),
+        TextBright = Color3.fromRGB(211, 225, 239),
+        TextMid = Color3.fromRGB(145, 163, 181),
+        TextDim = Color3.fromRGB(87, 105, 124),
+        Check = Color3.fromRGB(6, 16, 26),
+    },
+    Rose = {
+        Accent = Color3.fromRGB(235, 105, 145),
+        AccentBright = Color3.fromRGB(255, 150, 180),
+        AccentDark = Color3.fromRGB(116, 39, 64),
+        AccentDeep = Color3.fromRGB(66, 22, 39),
+        WindowBg = Color3.fromRGB(18, 11, 15),
+        ChromeBg = Color3.fromRGB(12, 7, 10),
+        PanelBg = Color3.fromRGB(29, 17, 23),
+        ControlBg = Color3.fromRGB(42, 24, 32),
+        ControlHover = Color3.fromRGB(56, 31, 42),
+        ControlBorder = Color3.fromRGB(84, 45, 59),
+        Track = Color3.fromRGB(48, 27, 36),
+        TextWhite = Color3.fromRGB(255, 243, 247),
+        TextBright = Color3.fromRGB(239, 211, 220),
+        TextMid = Color3.fromRGB(177, 137, 150),
+        TextDim = Color3.fromRGB(111, 79, 91),
+        Check = Color3.fromRGB(31, 10, 18),
+    },
+    Amethyst = {
+        Accent = Color3.fromRGB(168, 116, 255),
+        AccentBright = Color3.fromRGB(202, 166, 255),
+        AccentDark = Color3.fromRGB(76, 43, 132),
+        AccentDeep = Color3.fromRGB(43, 24, 77),
+        WindowBg = Color3.fromRGB(15, 11, 22),
+        ChromeBg = Color3.fromRGB(10, 7, 15),
+        PanelBg = Color3.fromRGB(24, 17, 35),
+        ControlBg = Color3.fromRGB(35, 25, 50),
+        ControlHover = Color3.fromRGB(48, 34, 68),
+        ControlBorder = Color3.fromRGB(72, 53, 101),
+        Track = Color3.fromRGB(40, 29, 57),
+        TextWhite = Color3.fromRGB(247, 242, 255),
+        TextBright = Color3.fromRGB(223, 211, 240),
+        TextMid = Color3.fromRGB(166, 148, 190),
+        TextDim = Color3.fromRGB(102, 84, 126),
+        Check = Color3.fromRGB(20, 12, 35),
+    },
+}
+
+local themeBindings = {}
+local ThemeManager = {}
+
+local function themeName(name)
+    name = tostring(name or "Blue")
+    for presetName in pairs(ThemePresets) do
+        if string.lower(presetName) == string.lower(name) then
+            return presetName
+        end
+    end
+    return nil
+end
+
+function ThemeManager.Set(name)
+    local presetName = themeName(name)
+    local preset = presetName and ThemePresets[presetName]
+    if not preset then
+        return false
+    end
+    for key, value in pairs(preset) do
+        Theme[key] = value
+    end
+    Theme.Current = presetName
+    return true
+end
+
+function ThemeManager.Apply(name, root)
+    local previous = {}
+    for key, value in pairs(Theme) do
+        if typeof(value) == "Color3" then
+            previous[key] = value
+        end
+    end
+    if not ThemeManager.Set(name) then
+        return false
+    end
+
+    local function replaceColor(value)
+        if typeof(value) ~= "Color3" then
+            return nil
+        end
+        for role, oldColor in pairs(previous) do
+            if value == oldColor then
+                return Theme[role]
+            end
+        end
+        return nil
+    end
+
+    local function updateInstance(instance)
+        local properties = {
+            "BackgroundColor3",
+            "BorderColor3",
+            "Color",
+            "ImageColor3",
+            "ScrollBarImageColor3",
+            "TextColor3",
+        }
+        for _, property in ipairs(properties) do
+            local ok, value = pcall(function() return instance[property] end)
+            if ok then
+                local replacement = replaceColor(value)
+                if replacement then
+                    pcall(function() instance[property] = replacement end)
+                end
+            end
+        end
+    end
+
+    for index = #themeBindings, 1, -1 do
+        local binding = themeBindings[index]
+        if not binding.instance or not binding.instance.Parent then
+            table.remove(themeBindings, index)
+        elseif not root or binding.instance == root or binding.instance:IsDescendantOf(root) then
+            binding.instance[binding.property] = Theme[binding.role]
+        end
+    end
+    if root then
+        updateInstance(root)
+        for _, descendant in ipairs(root:GetDescendants()) do
+            updateInstance(descendant)
+        end
+    end
+    return true
+end
+
+function ThemeManager.Get()
+    return Theme.Current
+end
+
+function ThemeManager.List()
+    local names = {}
+    for name in pairs(ThemePresets) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return names
+end
+
+Vision.Themes = ThemePresets
+Vision.ThemeManager = ThemeManager
+Vision.ThemeNames = ThemeManager.List()
 
 local WIN_W = 660
 local WIN_H = 620
@@ -214,6 +397,18 @@ local function make(className, properties, children)
     for key, value in pairs(properties or {}) do
         if key ~= "Parent" then
             instance[key] = value
+            if typeof(value) == "Color3" then
+                for role, themeColor in pairs(Theme) do
+                    if typeof(themeColor) == "Color3" and value == themeColor then
+                        themeBindings[#themeBindings + 1] = {
+                            instance = instance,
+                            property = key,
+                            role = role,
+                        }
+                        break
+                    end
+                end
+            end
         end
     end
     for _, child in ipairs(children or {}) do
@@ -369,6 +564,9 @@ function Vision.Window(options)
     local self = {}
     local menuKey = options.keybind or Enum.KeyCode.Insert
 
+    if options.theme then
+        ThemeManager.Set(options.theme)
+    end
     if options.accent and typeof(options.accent) == "Color3" then
         Theme.Accent = options.accent
     end
@@ -445,7 +643,7 @@ function Vision.Window(options)
         Parent = screen,
     })
     corner(win, 7)
-    stroke(win, Color3.fromRGB(42, 57, 74), 0.25)
+    stroke(win, Theme.ControlBorder, 0.25)
 
     local topbar = make("Frame", {
         Name = "Topbar",
@@ -621,7 +819,7 @@ function Vision.Window(options)
         BackgroundTransparency = 1,
         Font = FONT,
         Text = "",
-        PlaceholderText = "Search controls",
+        PlaceholderText = "Search",
         PlaceholderColor3 = Theme.TextDim,
         TextSize = 12,
         TextColor3 = Theme.TextBright,
@@ -722,38 +920,16 @@ function Vision.Window(options)
         BackgroundTransparency = 1,
         Parent = win,
     })
-    local footerIcon = make("ImageLabel", {
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, MARGIN, 0.5, 0),
-        Size = UDim2.new(0, 13, 0, 13),
-        BackgroundTransparency = 1,
-        ImageColor3 = Theme.TextDim,
-        ScaleType = Enum.ScaleType.Fit,
-        Parent = footer,
-    })
-    applyIcon(footerIcon, resolveIcon("globe"))
     make("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, MARGIN + 19, 0.5, 0),
-        Size = UDim2.new(0, 160, 1, 0),
+        Position = UDim2.new(0, MARGIN, 0.5, 0),
+        Size = UDim2.new(0, 180, 1, 0),
         BackgroundTransparency = 1,
-        Font = FONT,
-        Text = textValue(options.footerText, "Vision"),
+        Font = FONT_MED,
+        Text = "Vision v1.0.0",
         TextSize = 12,
         TextColor3 = Theme.TextDim,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = footer,
-    })
-    local menuKeyLabel = make("TextLabel", {
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -MARGIN, 0.5, 0),
-        Size = UDim2.new(0, 200, 1, 0),
-        BackgroundTransparency = 1,
-        Font = FONT,
-        Text = "Menu: " .. keyName(menuKey),
-        TextSize = 12,
-        TextColor3 = Theme.TextDim,
-        TextXAlignment = Enum.TextXAlignment.Right,
         Parent = footer,
     })
 
@@ -1176,7 +1352,7 @@ function Vision.Window(options)
                 Parent = parentColumn,
             })
             corner(box, 4)
-            stroke(box, Color3.fromRGB(29, 42, 56), 0.25)
+            stroke(box, Theme.ControlBorder, 0.25)
                 local header = make("Frame", {
                 Name = "Header",
                 Size = UDim2.new(1, 0, 0, HEAD_H),
@@ -1186,7 +1362,7 @@ function Vision.Window(options)
                 Parent = box,
             })
             corner(header, 4)
-            local headerStroke = stroke(header, Color3.fromRGB(35, 85, 135), 0.45, 1)
+            local headerStroke = stroke(header, Theme.Accent, 0.45, 1)
             local headerTitle = make("TextLabel", {
                 Position = UDim2.new(0, 12, 0, 0),
                 Size = UDim2.new(1, -24, 1, 0),
@@ -1199,16 +1375,6 @@ function Vision.Window(options)
                 ZIndex = 3,
                 Parent = header,
             })
-            header.MouseEnter:Connect(function()
-                tween(header, { BackgroundColor3 = Theme.AccentDark }, 0.16, Enum.EasingStyle.Quint)
-                tween(headerStroke, { Color = Theme.AccentBright, Transparency = 0.12 }, 0.16)
-                tween(headerTitle, { TextColor3 = Theme.TextWhite }, 0.16)
-            end)
-            header.MouseLeave:Connect(function()
-                tween(header, { BackgroundColor3 = Theme.AccentDeep }, 0.2, Enum.EasingStyle.Quint)
-                tween(headerStroke, { Color = Color3.fromRGB(35, 85, 135), Transparency = 0.45 }, 0.2)
-                tween(headerTitle, { TextColor3 = Theme.TextWhite }, 0.2)
-            end)
             if groupOptions.info then
                 local info = make("TextButton", {
                     AnchorPoint = Vector2.new(1, 0.5),
@@ -2522,7 +2688,14 @@ function Vision.Window(options)
 
     function self.SetMenuKey(keyCode)
         menuKey = keyCode
-        menuKeyLabel.Text = "Menu: " .. keyName(menuKey)
+    end
+
+    function self.SetTheme(name)
+        return ThemeManager.Apply(name, screen)
+    end
+
+    function self.GetTheme()
+        return Theme.Current
     end
 
     track(UserInputService.InputBegan:Connect(function(input, processed)
@@ -2594,6 +2767,14 @@ function Vision.Window(options)
     self.Flags = Vision.Flags
     self.Window = win
     self.Theme = Theme
+    self.Themes = ThemePresets
+    self.ThemeManager = {
+        Set = function(name) return ThemeManager.Apply(name, screen) end,
+        Apply = function(name) return ThemeManager.Apply(name, screen) end,
+        Get = ThemeManager.Get,
+        List = ThemeManager.List,
+    }
+    self.ThemeNames = ThemeManager.List()
     return self
 end
 
