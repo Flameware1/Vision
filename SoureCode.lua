@@ -182,10 +182,9 @@ local MARGIN = 16
 local COL_GAP = 14
 local COL_W = math.floor((WIN_W - MARGIN * 2 - COL_GAP) / 2)
 local TOPBAR_SEARCH_X = MARGIN + 54
-local TOPBAR_SEARCH_BOX_X = MARGIN + 73
-local TOPBAR_SEARCH_W = 112
-local TOPBAR_TITLE_X = MARGIN + 194
-local TOPBAR_TABS_X = MARGIN + 292
+local TOPBAR_SEARCH_W = 174
+local TOPBAR_TABS_X = MARGIN + 246
+local TOPBAR_TABS_W = WIN_W - TOPBAR_TABS_X - MARGIN
 local HEAD_H = 28
 local TEXT = 13
 
@@ -368,7 +367,6 @@ end
 function Vision.Window(options)
     options = options or {}
     local self = {}
-    local title = textValue(options.title, "VISION")
     local menuKey = options.keybind or Enum.KeyCode.Insert
 
     if options.accent and typeof(options.accent) == "Color3" then
@@ -592,46 +590,119 @@ function Vision.Window(options)
         setMenuVisible(true)
     end)
 
-    local searchIcon = make("ImageLabel", {
+    local searchFrame = make("Frame", {
+        Name = "SearchFrame",
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(0, TOPBAR_SEARCH_X, 0.5, 0),
+        Size = UDim2.new(0, TOPBAR_SEARCH_W, 0, 32),
+        BackgroundColor3 = Theme.ControlBg,
+        BackgroundTransparency = 0.2,
+        BorderSizePixel = 0,
+        Parent = topbar,
+    })
+    corner(searchFrame, 6)
+    local searchStroke = stroke(searchFrame, Theme.ControlBorder, 0.2)
+    local searchIcon = make("ImageLabel", {
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 9, 0.5, 0),
         Size = UDim2.new(0, 14, 0, 14),
         BackgroundTransparency = 1,
         ImageColor3 = Theme.TextDim,
         ScaleType = Enum.ScaleType.Fit,
-        Parent = topbar,
+        Parent = searchFrame,
     })
     applyIcon(searchIcon, resolveIcon("search"))
 
     local searchBox = make("TextBox", {
         Name = "SearchBox",
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, TOPBAR_SEARCH_BOX_X, 0.5, 0),
-        Size = UDim2.new(0, TOPBAR_SEARCH_W, 0, 24),
+        Position = UDim2.new(0, 30, 0.5, 0),
+        Size = UDim2.new(1, -58, 0, 26),
         BackgroundTransparency = 1,
         Font = FONT,
         Text = "",
-        PlaceholderText = "Search...",
+        PlaceholderText = "Search controls",
         PlaceholderColor3 = Theme.TextDim,
-        TextSize = TEXT,
+        TextSize = 12,
         TextColor3 = Theme.TextBright,
         TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false,
+        Parent = searchFrame,
+    })
+    local searchClear = make("TextButton", {
+        Name = "ClearSearch",
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -7, 0.5, 0),
+        Size = UDim2.new(0, 20, 0, 20),
+        BackgroundTransparency = 1,
+        Text = "x",
+        Font = FONT_BOLD,
+        TextSize = 12,
+        TextColor3 = Theme.TextDim,
+        AutoButtonColor = false,
+        Visible = false,
+        Parent = searchFrame,
+    })
+    searchBox.MouseEnter:Connect(function()
+        tween(searchStroke, { Color = Theme.AccentBright, Transparency = 0.08 }, 0.12)
+    end)
+    searchBox.MouseLeave:Connect(function()
+        if not searchBox:IsFocused() then
+            tween(searchStroke, { Color = Theme.ControlBorder, Transparency = 0.2 }, 0.16)
+        end
+    end)
+    searchBox.Focused:Connect(function()
+        tween(searchStroke, { Color = Theme.Accent, Transparency = 0 }, 0.12)
+        tween(searchIcon, { ImageColor3 = Theme.AccentBright }, 0.12)
+    end)
+    searchBox.FocusLost:Connect(function()
+        tween(searchStroke, { Color = Theme.ControlBorder, Transparency = 0.2 }, 0.16)
+        tween(searchIcon, { ImageColor3 = Theme.TextDim }, 0.16)
+    end)
+    searchClear.MouseEnter:Connect(function()
+        tween(searchClear, { TextColor3 = Theme.TextWhite }, 0.1)
+    end)
+    searchClear.MouseLeave:Connect(function()
+        tween(searchClear, { TextColor3 = Theme.TextDim }, 0.14)
+    end)
+    searchClear.MouseButton1Click:Connect(function()
+        searchBox.Text = ""
+        searchBox:CaptureFocus()
+    end)
+
+    local tabHolder = make("ScrollingFrame", {
+        Name = "TabHolder",
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, TOPBAR_TABS_X, 0.5, 0),
+        Size = UDim2.new(0, TOPBAR_TABS_W, 0, 40),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.X,
+        ScrollingDirection = Enum.ScrollingDirection.X,
+        ScrollBarThickness = 0,
+        ScrollingEnabled = true,
+        ClipsDescendants = true,
         Parent = topbar,
     })
-    make("TextLabel", {
-        Name = "Title",
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, TOPBAR_TITLE_X, 0.5, 0),
-        Size = UDim2.new(0, 88, 1, 0),
+    local tabList = make("Frame", {
+        Name = "TabList",
+        Size = UDim2.new(0, 0, 1, 0),
+        AutomaticSize = Enum.AutomaticSize.X,
         BackgroundTransparency = 1,
-        Font = FONT_BOLD,
-        Text = title,
-        TextSize = 12,
-        TextColor3 = Theme.TextWhite,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        Parent = topbar,
+        Parent = tabHolder,
+    })
+    tabHolder.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            local nextX = tabHolder.CanvasPosition.X - input.Position.Z * 42
+            tabHolder.CanvasPosition = Vector2.new(math.max(0, nextX), 0)
+        end
+    end)
+    make("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = tabList,
     })
 
     local content = make("Frame", {
@@ -844,7 +915,6 @@ function Vision.Window(options)
 
     local tabs = {}
     local activeTab
-    local tabX = TOPBAR_TABS_X
     local searchIndex = {}
     local switchGeneration = 0
 
@@ -885,13 +955,21 @@ function Vision.Window(options)
         if oldTab then
             restorePage(oldTab)
             oldTab.Page.Visible = false
-            tween(oldTab.NavIcon, { ImageColor3 = Theme.TextDim }, 0.14)
+            tween(oldTab.Nav, { BackgroundColor3 = Theme.ControlBg, BackgroundTransparency = 1 }, 0.14)
+            tween(oldTab.NavStroke, { Color = Theme.ControlBorder, Transparency = 0.65 }, 0.14)
             tween(oldTab.NavLabel, { TextColor3 = Theme.TextDim }, 0.14)
         end
 
         activeTab = tab
-        tween(tab.NavIcon, { ImageColor3 = Theme.Accent }, 0.14)
+        tween(tab.Nav, { BackgroundColor3 = Theme.AccentDeep, BackgroundTransparency = 0.1 }, 0.14)
+        tween(tab.NavStroke, { Color = Theme.Accent, Transparency = 0.05 }, 0.14)
         tween(tab.NavLabel, { TextColor3 = Theme.TextWhite }, 0.14)
+        task.defer(function()
+            if tab.Nav and tab.Nav.Parent then
+                local target = tab.Nav.AbsolutePosition.X - tabHolder.AbsolutePosition.X - 32
+                tabHolder.CanvasPosition = Vector2.new(math.max(0, target), 0)
+            end
+        end)
 
         restorePage(tab)
         local cache = collectFade(tab.Page)
@@ -966,30 +1044,26 @@ function Vision.Window(options)
         local tab = { Name = tabName }
         local nav = make("Frame", {
             Name = "Nav_" .. tabId,
-            AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, tabX, 0.5, 0),
-            Size = UDim2.new(0, 30, 1, 0),
+            Size = UDim2.new(0, 0, 1, 0),
             AutomaticSize = Enum.AutomaticSize.X,
+            BackgroundColor3 = Theme.ControlBg,
             BackgroundTransparency = 1,
-            Parent = topbar,
+            BorderSizePixel = 0,
+            LayoutOrder = #tabs + 1,
+            Parent = tabList,
         })
+        corner(nav, 5)
+        local navStroke = stroke(nav, Theme.ControlBorder, 0.65, 1)
         local navScale = make("UIScale", {
             Scale = 1,
             Parent = nav,
         })
-        local navIcon = make("ImageLabel", {
-            AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 0, 0.5, 0),
-            Size = UDim2.new(0, 16, 0, 16),
-            BackgroundTransparency = 1,
-            ImageColor3 = Theme.TextDim,
-            ScaleType = Enum.ScaleType.Fit,
+        make("UIPadding", {
+            PaddingLeft = UDim.new(0, 12),
+            PaddingRight = UDim.new(0, 12),
             Parent = nav,
         })
-        applyIcon(navIcon, resolveIcon(tabOptions.icon or "circle"))
         local navLabel = make("TextLabel", {
-            AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 21, 0.5, 0),
             Size = UDim2.new(0, 0, 1, 0),
             AutomaticSize = Enum.AutomaticSize.X,
             BackgroundTransparency = 1,
@@ -997,10 +1071,9 @@ function Vision.Window(options)
             Text = tabName,
             TextSize = TEXT,
             TextColor3 = Theme.TextDim,
-            TextXAlignment = Enum.TextXAlignment.Left,
+            TextXAlignment = Enum.TextXAlignment.Center,
             Parent = nav,
         })
-        tabX = tabX + 21 + math.max(40, #tabName * 7) + 26
 
         local page = make("ScrollingFrame", {
             Name = "Page_" .. tabId,
@@ -1047,7 +1120,8 @@ function Vision.Window(options)
         })
 
         tab.Page = page
-        tab.NavIcon = navIcon
+        tab.Nav = nav
+        tab.NavStroke = navStroke
         tab.NavLabel = navLabel
         tab.ColL = left
         tab.ColR = right
@@ -1059,16 +1133,18 @@ function Vision.Window(options)
             end
         end)
         nav.MouseEnter:Connect(function()
-            tween(navScale, { Scale = 1.04 }, 0.14, Enum.EasingStyle.Quint)
+            tween(navScale, { Scale = 1.035 }, 0.14, Enum.EasingStyle.Quint)
             if activeTab ~= tab then
-                tween(navIcon, { ImageColor3 = Theme.TextMid }, 0.12)
-                tween(navLabel, { TextColor3 = Theme.TextMid }, 0.12)
+                tween(nav, { BackgroundColor3 = Theme.ControlHover, BackgroundTransparency = 0.15 }, 0.12)
+                tween(navStroke, { Color = Theme.ControlBorder, Transparency = 0.2 }, 0.12)
+                tween(navLabel, { TextColor3 = Theme.TextBright }, 0.12)
             end
         end)
         nav.MouseLeave:Connect(function()
             tween(navScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
             if activeTab ~= tab then
-                tween(navIcon, { ImageColor3 = Theme.TextDim }, 0.16)
+                tween(nav, { BackgroundColor3 = Theme.ControlBg, BackgroundTransparency = 1 }, 0.16)
+                tween(navStroke, { Color = Theme.ControlBorder, Transparency = 0.65 }, 0.16)
                 tween(navLabel, { TextColor3 = Theme.TextDim }, 0.16)
             end
         end)
@@ -1238,6 +1314,118 @@ function Vision.Window(options)
                 TextWrapped = true,
                 Parent = row,
             })
+            return { Row = row }
+        end
+
+        function group.Paragraph(options)
+            options = options or {}
+            local heading = textValue(options.title or options.text, "")
+            local contentText = textValue(options.content or options.description, "")
+            local height = tonumber(options.height) or (heading ~= "" and contentText ~= "" and 52 or 30)
+            local row = baseRow(height)
+            if heading ~= "" then
+                make("TextLabel", {
+                    Size = UDim2.new(1, 0, 0, 18),
+                    BackgroundTransparency = 1,
+                    Font = FONT_MED,
+                    Text = heading,
+                    TextSize = TEXT,
+                    TextColor3 = Theme.TextBright,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = row,
+                })
+            end
+            if contentText ~= "" then
+                make("TextLabel", {
+                    Position = UDim2.new(0, 0, 0, heading ~= "" and 19 or 0),
+                    Size = UDim2.new(1, 0, 0, heading ~= "" and height - 19 or height),
+                    BackgroundTransparency = 1,
+                    Font = FONT,
+                    Text = contentText,
+                    TextSize = 12,
+                    TextColor3 = Theme.TextMid,
+                    TextWrapped = true,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextYAlignment = Enum.TextYAlignment.Top,
+                    Parent = row,
+                })
+            end
+            if heading ~= "" or contentText ~= "" then
+                registerSearch(heading .. " " .. contentText, row)
+            end
+            return { Row = row }
+        end
+
+        function group.Section(options)
+            options = options or {}
+            local text = textValue(options.text or options.title, "Section")
+            local row = baseRow(24)
+            local accent = make("Frame", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 0, 0.5, 0),
+                Size = UDim2.new(0, 3, 0, 14),
+                BackgroundColor3 = Theme.AccentBright,
+                BorderSizePixel = 0,
+                Parent = row,
+            })
+            corner(accent, 2)
+            make("TextLabel", {
+                Position = UDim2.new(0, 11, 0, 0),
+                Size = UDim2.new(1, -11, 1, 0),
+                BackgroundTransparency = 1,
+                Font = FONT_BOLD,
+                Text = text,
+                TextSize = 12,
+                TextColor3 = Theme.TextDim,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = row,
+            })
+            registerSearch(text, row)
+            return { Row = row }
+        end
+
+        function group.Separator(options)
+            options = options or {}
+            local row = baseRow(12)
+            make("Frame", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 0, 0.5, 0),
+                Size = UDim2.new(1, 0, 0, 1),
+                BackgroundColor3 = options.color and typeof(options.color) == "Color3" and options.color or Color3.fromRGB(35, 48, 63),
+                BorderSizePixel = 0,
+                Parent = row,
+            })
+            return { Row = row }
+        end
+
+        function group.Spacer(options)
+            options = options or {}
+            local row = baseRow(math.max(2, tonumber(options.height) or 8))
+            return { Row = row }
+        end
+
+        function group.Badge(options)
+            options = options or {}
+            local text = textValue(options.text or options.value, "Badge")
+            local row = baseRow(24)
+            local badge = make("TextLabel", {
+                Size = UDim2.new(0, 0, 0, 20),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundColor3 = options.color and typeof(options.color) == "Color3" and options.color or Theme.AccentDeep,
+                BorderSizePixel = 0,
+                Font = FONT_MED,
+                Text = text,
+                TextSize = 11,
+                TextColor3 = Theme.TextBright,
+                Parent = row,
+            })
+            corner(badge, 5)
+            make("UIPadding", {
+                PaddingLeft = UDim.new(0, 9),
+                PaddingRight = UDim.new(0, 9),
+                Parent = badge,
+            })
+            registerSearch(text, row)
             return { Row = row }
         end
 
@@ -1421,6 +1609,18 @@ function Vision.Window(options)
                 TextXAlignment = Enum.TextXAlignment.Right,
                 Parent = row,
             })
+            local modeLabel = make("TextLabel", {
+                AnchorPoint = Vector2.new(1, 0),
+                Position = UDim2.new(1, -124, 0, 0),
+                Size = UDim2.new(0, 55, 1, 0),
+                BackgroundTransparency = 1,
+                Font = FONT,
+                Text = textValue(mode, "Toggle"),
+                TextSize = 10,
+                TextColor3 = Theme.TextDim,
+                TextXAlignment = Enum.TextXAlignment.Right,
+                Parent = row,
+            })
             local function stopListening()
                 listening = false
                 keyLabel.Text = "[ " .. keyName(key) .. " ]"
@@ -1451,8 +1651,17 @@ function Vision.Window(options)
                     tween(keyLabel, { TextColor3 = Theme.AccentBright }, 0.1)
                 end
             end)
+            local active = false
             local function fire(isDown)
-                if options.callback then task.spawn(options.callback, isDown, key) end
+                if mode == "Hold" then
+                    active = isDown
+                    if options.callback then task.spawn(options.callback, active, key) end
+                elseif mode == "Toggle" and isDown then
+                    active = not active
+                    if options.callback then task.spawn(options.callback, active, key) end
+                elseif mode ~= "Toggle" and isDown then
+                    if options.callback then task.spawn(options.callback, true, key) end
+                end
             end
             track(UserInputService.InputBegan:Connect(function(input, processed)
                 if listening and not processed and input.UserInputType == Enum.UserInputType.Keyboard then
@@ -1484,7 +1693,18 @@ function Vision.Window(options)
                     setKey(nil)
                 end
             end, function() return key and key.Name or "None" end)
-            return { Row = row, Set = setKey, Get = function() return key end }
+            return {
+                Row = row,
+                Set = setKey,
+                Get = function() return key end,
+                GetMode = function() return mode end,
+                SetMode = function(nextMode)
+                    if nextMode == "Toggle" or nextMode == "Hold" or nextMode == "Always" then
+                        mode = nextMode
+                        modeLabel.Text = mode
+                    end
+                end,
+            }
         end
 
         function group.Slider(options)
@@ -2044,6 +2264,13 @@ function Vision.Window(options)
                 Get = function() return input.Text end,
             }
         end
+
+        group.Input = group.Textbox
+        group.Text = group.Label
+        group.Switch = group.Toggle
+        group.Select = group.Dropdown
+        group.ColorPicker = group.Color
+        group.Action = group.Button
     end
 
     openHuePopup = function(anchor, getHue, setHue)
@@ -2252,6 +2479,7 @@ function Vision.Window(options)
     end
 
     track(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        searchClear.Visible = searchBox.Text ~= ""
         runSearch(searchBox.Text)
     end))
 
