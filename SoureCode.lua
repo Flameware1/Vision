@@ -2,19 +2,6 @@ local Vision = {}
 Vision.Flags = {}
 Vision.Version = "1.0.0"
 
-local Runtime = (type(getgenv) == "function" and getgenv()) or _G
-local ACTIVE_WINDOW_KEY = "__VISION_ACTIVE_WINDOW_V1"function Vision.Unload()
-	local active = Runtime[ACTIVE_WINDOW_KEY]
-	if type(active) == "table" and type(active.Destroy) == "function" then
-		pcall(active.Destroy)
-	end
-	Runtime[ACTIVE_WINDOW_KEY] = nil
-	for flag in pairs(Vision.Flags) do
-
-        Vision.Flags[flag] = nil
-    end
-end
-
 local function getService(name)
 	local ok, svc = pcall(function()
 		return game:GetService(name)
@@ -59,18 +46,6 @@ local function getGuiParent()
 		return lp:FindFirstChildOfClass("PlayerGui") or lp:WaitForChild("PlayerGui")
 	end
 	return nil
-end
-
-local function destroyExistingVisionGuis()
-	local parent = getGuiParent()
-	if not parent then return end
-	pcall(function()
-		for _, child in ipairs(parent:GetChildren()) do
-			if child:IsA("ScreenGui") and child.Name == "Vision" then
-				child:Destroy()
-			end
-		end
-	end)
 end
 
 local function protectGui(gui)
@@ -152,7 +127,7 @@ local function applyIcon(image, spec)
 	return true
 end
 
-local ASSET_BASE = "https://raw.githubusercontent.com/SyncUnofficial/Vision/main/assets/"
+local ASSET_BASE = "https://raw.githubusercontent.com/Flameware1/Vision/main/assets/"
 
 local function customAssetFn()
 	if type(getcustomasset) == "function" then return getcustomasset end
@@ -190,9 +165,9 @@ local function remoteImage(filename)
 	return remoteImageCache[filename] or nil
 end
 
-local STRIPES_FILE = "tempus_stripes_v1.png"
-local TICK_FILE = "tempus_tick_v1.png"
-local LOGO_FILE = "tempus_logo_v2.png"
+local LOGO_URL = "https://raw.githubusercontent.com/Flameware1/Vision/main/Vision.png"
+local STRIPES_FILE = "vision_stripes_v1.png"
+local TICK_FILE = "vision_tick_v1.png"
 
 local Theme = {
 	Accent = Color3.fromRGB(236, 110, 180),
@@ -293,8 +268,6 @@ end
 
 function Vision.Window(opts)
 	opts = opts or {}
-	Vision.Unload()
-	destroyExistingVisionGuis()
 	local self = {}
 	local title = opts.title or "VISION"
 	if opts.accent then
@@ -337,16 +310,7 @@ function Vision.Window(opts)
 		end
 		conns = {}
 		flagBinds = {}
-		if popupCleanup then
-			pcall(popupCleanup)
-			popupCleanup = nil
-		end
-		if Runtime[ACTIVE_WINDOW_KEY] == self then
-			Runtime[ACTIVE_WINDOW_KEY] = nil
-		end
-		if screen and screen.Parent then
-			screen:Destroy()
-		end
+		screen:Destroy()
 	end
 
 	local function viewport()
@@ -394,14 +358,7 @@ function Vision.Window(opts)
 		ScaleType = Enum.ScaleType.Fit,
 		Parent = topbar,
 	})
-	local logoAsset = remoteImage(LOGO_FILE)
-	if opts.logo then
-		applyIcon(logo, resolveIcon(opts.logo))
-	elseif logoAsset then
-		logo.Image = logoAsset
-	else
-		applyIcon(logo, resolveIcon("hourglass"))
-	end
+	logo.Image = LOGO_URL
 
 	make("Frame", {
 		Name = "LogoDivider",
@@ -461,20 +418,42 @@ function Vision.Window(opts)
 	make("Frame", {
 		Position = UDim2.new(0, MARGIN, 0, 0),
 		Size = UDim2.new(1, -MARGIN * 2, 0, 1),
-		BackgroundColor3 = Theme.ControlBorder,
+		BackgroundColor3 = Color3.fromRGB(30, 29, 32),
 		BorderSizePixel = 0,
 		Parent = footer,
 	})
-	make("TextLabel", {
+	local globe = make("ImageLabel", {
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, MARGIN, 0.5, 0),
-		Size = UDim2.new(0, 180, 1, 0),
+		Size = UDim2.new(0, 13, 0, 13),
 		BackgroundTransparency = 1,
-		Font = FONT_MED,
-		Text = "Vision v1.0.0",
+		ImageColor3 = Theme.TextDim,
+		ScaleType = Enum.ScaleType.Fit,
+		Parent = footer,
+	})
+	applyIcon(globe, resolveIcon("globe"))
+	make("TextLabel", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, MARGIN + 19, 0.5, 0),
+		Size = UDim2.new(0, 160, 1, 0),
+		BackgroundTransparency = 1,
+		Font = FONT,
+		Text = opts.footerText or "English",
 		TextSize = 12,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = footer,
+	})
+	local menuKeyLbl = make("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -MARGIN, 0.5, 0),
+		Size = UDim2.new(0, 200, 1, 0),
+		BackgroundTransparency = 1,
+		Font = FONT,
+		Text = "Menu: " .. keyName(menuKey),
+		TextSize = 12,
+		TextColor3 = Theme.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Right,
 		Parent = footer,
 	})
 
@@ -663,10 +642,12 @@ function Vision.Window(opts)
 		if old then
 			restorePage(old)
 			old.Page.Visible = false
-			tween(old.Nav, { TextColor3 = Theme.TextDim }, 0.14)
+			tween(old.NavIcon, { ImageColor3 = Theme.TextDim }, 0.14)
+			tween(old.NavLabel, { TextColor3 = Theme.TextDim }, 0.14)
 		end
 		activeTab = t
-		tween(t.Nav, { TextColor3 = Theme.TextWhite }, 0.14)
+		tween(t.NavIcon, { ImageColor3 = Theme.Accent }, 0.14)
+		tween(t.NavLabel, { TextColor3 = Theme.TextWhite }, 0.14)
 
 		restorePage(t)
 		local cache = collectFade(t.Page)
@@ -721,22 +702,39 @@ function Vision.Window(opts)
 		local tab = {}
 		tab.Name = name
 
-		local nav = make("TextButton", {
+		local nav = make("Frame", {
 			Name = "Nav_" .. name,
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, navX, 0.5, 0),
-			Size = UDim2.new(0, math.max(44, #name * 7 + 24), 1, 0),
+			Size = UDim2.new(0, 30, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			Text = name,
-			Font = FONT_MED,
-			TextSize = TEXT,
-			TextColor3 = Theme.TextDim,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			AutoButtonColor = false,
 			Parent = topbar,
 		})
-		navX = navX + math.max(44, #name * 7 + 24) + 18
+		local navIcon = make("ImageLabel", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 0, 0.5, 0),
+			Size = UDim2.new(0, 16, 0, 16),
+			BackgroundTransparency = 1,
+			ImageColor3 = Theme.TextDim,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = nav,
+		})
+		applyIcon(navIcon, resolveIcon(topts.icon or "circle"))
+		local navLbl = make("TextLabel", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 21, 0.5, 0),
+			Size = UDim2.new(0, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundTransparency = 1,
+			Font = FONT_MED,
+			Text = name,
+			TextSize = TEXT,
+			TextColor3 = Theme.TextDim,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = nav,
+		})
+		navX = navX + 21 + math.max(40, navLbl.TextBounds.X ~= 0 and navLbl.TextBounds.X or (#name * 7)) + 26
 
 		local page = make("ScrollingFrame", {
 			Name = "Page_" .. name,
@@ -783,6 +781,8 @@ function Vision.Window(opts)
 		})
 
 		tab.Page = page
+		tab.NavIcon = navIcon
+		tab.NavLabel = navLbl
 		tab.ColL = colL
 		tab.ColR = colR
 		tab.Groups = {}
@@ -794,12 +794,14 @@ function Vision.Window(opts)
 		end)
 		nav.MouseEnter:Connect(function()
 			if activeTab ~= tab then
-				tween(nav, { TextColor3 = Theme.TextBright }, 0.1)
+				tween(navIcon, { ImageColor3 = Theme.TextMid }, 0.1)
+				tween(navLbl, { TextColor3 = Theme.TextMid }, 0.1)
 			end
 		end)
 		nav.MouseLeave:Connect(function()
 			if activeTab ~= tab then
-				tween(nav, { TextColor3 = Theme.TextDim }, 0.1)
+				tween(navIcon, { ImageColor3 = Theme.TextDim }, 0.1)
+				tween(navLbl, { TextColor3 = Theme.TextDim }, 0.1)
 			end
 		end)
 
@@ -843,6 +845,19 @@ function Vision.Window(opts)
 				}),
 				Parent = head,
 			})
+			local stripesAsset = remoteImage(STRIPES_FILE)
+			if stripesAsset then
+				make("ImageLabel", {
+					Size = UDim2.new(1, 0, 1, 0),
+					BackgroundTransparency = 1,
+					Image = stripesAsset,
+					ScaleType = Enum.ScaleType.Tile,
+					TileSize = UDim2.new(0, 24, 0, 24),
+					ImageTransparency = 0.45,
+					ZIndex = 2,
+					Parent = head,
+				})
+			end
 			local headTitle = make("TextLabel", {
 				Position = UDim2.new(0, 10, 0, 0),
 				Size = UDim2.new(1, -50, 1, 0),
@@ -2075,6 +2090,7 @@ function Vision.Window(opts)
 	end
 	function self.SetMenuKey(kc)
 		menuKey = kc
+		menuKeyLbl.Text = "Menu: " .. keyName(menuKey)
 	end
 
 	trackConn(UserInputService.InputBegan:Connect(function(input, processed)
@@ -2143,11 +2159,8 @@ function Vision.Window(opts)
 		return names
 	end
 
-	Runtime[ACTIVE_WINDOW_KEY] = self
 	self.Flags = Vision.Flags
 	self.Window = win
-	self.Title = title
-	self.Theme = Theme
 
 	return self
 end
