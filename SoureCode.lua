@@ -10,7 +10,9 @@
         local tab = window:Tab("Combat", { icon = "crosshair" })
         local group = tab:Group("Aim", { side = "left" })
         group.Toggle({ text = "Enabled", flag = "aim_enabled" })
-        group.Slider({ text = "FOV", min = 1, max = 180, default = 90, step = 1 })        Slider options:
+        group.Slider({ text = "FOV", min = 1, max = 180, default = 90, step = 1 })
+
+        Slider options:
         min, max, default, step, decimals, suffix, flag, callback
 
         Theme options:
@@ -25,6 +27,30 @@
 local Vision = {}
 Vision.Flags = {}
 Vision.Version = "1.0.0"
+
+local function runtimeEnvironment()
+    if type(getgenv) == "function" then
+        local ok, environment = pcall(getgenv)
+        if ok and type(environment) == "table" then
+            return environment
+        end
+    end
+    return _G
+end
+
+local Runtime = runtimeEnvironment()
+local RUNTIME_KEY = "__VISION_ACTIVE_WINDOW_V1"
+
+function Vision.Unload()
+    local previous = Runtime[RUNTIME_KEY]
+    if type(previous) == "table" and type(previous.Destroy) == "function" then
+        pcall(previous.Destroy)
+    end
+    Runtime[RUNTIME_KEY] = nil
+    for flag in pairs(Vision.Flags) do
+        Vision.Flags[flag] = nil
+    end
+end
 
 local function getService(name)
     local ok, service = pcall(function()
@@ -73,6 +99,20 @@ local function getGuiParent()
         return player:FindFirstChildOfClass("PlayerGui") or player:WaitForChild("PlayerGui")
     end
     return nil
+end
+
+local function destroyExistingVisionGuis()
+    local parent = getGuiParent()
+    if not parent then
+        return
+    end
+    pcall(function()
+        for _, child in ipairs(parent:GetChildren()) do
+            if child:IsA("ScreenGui") and child.Name == "Vision" then
+                child:Destroy()
+            end
+        end
+    end)
 end
 
 local function protectGui(gui)
@@ -303,6 +343,24 @@ function ThemeManager.Apply(name, root)
         return nil
     end
 
+    local function replaceColorSequence(value)
+        if typeof(value) ~= "ColorSequence" then
+            return nil
+        end
+        local changed = false
+        local keypoints = {}
+        for _, keypoint in ipairs(value.Keypoints) do
+            local replacement = replaceColor(keypoint.Value)
+            if replacement then
+                keypoints[#keypoints + 1] = ColorSequenceKeypoint.new(keypoint.Time, replacement)
+                changed = true
+            else
+                keypoints[#keypoints + 1] = keypoint
+            end
+        end
+        return changed and ColorSequence.new(keypoints) or nil
+    end
+
     local function updateInstance(instance)
         local properties = {
             "BackgroundColor3",
@@ -315,7 +373,7 @@ function ThemeManager.Apply(name, root)
         for _, property in ipairs(properties) do
             local ok, value = pcall(function() return instance[property] end)
             if ok then
-                local replacement = replaceColor(value)
+                local replacement = replaceColor(value) or replaceColorSequence(value)
                 if replacement then
                     pcall(function() instance[property] = replacement end)
                 end
@@ -354,7 +412,18 @@ function ThemeManager.List()
 end
 
 Vision.Themes = ThemePresets
-Vision.ThemeManager = ThemeManager
+Vision.ThemeManager = {
+    Set = function(name)
+        local current = Runtime[RUNTIME_KEY]
+        return ThemeManager.Apply(name, current and current.Gui)
+    end,
+    Apply = function(name)
+        local current = Runtime[RUNTIME_KEY]
+        return ThemeManager.Apply(name, current and current.Gui)
+    end,
+    Get = ThemeManager.Get,
+    List = ThemeManager.List,
+}
 Vision.ThemeNames = ThemeManager.List()
 
 local WIN_W = 660
@@ -561,6 +630,11 @@ end
 
 function Vision.Window(options)
     options = options or {}
+    Vision.Unload()
+    destroyExistingVisionGuis()
+    for flag in pairs(Vision.Flags) do
+        Vision.Flags[flag] = nil
+    end
     local self = {}
     local menuKey = options.keybind or Enum.KeyCode.Insert
 
@@ -615,6 +689,19 @@ function Vision.Window(options)
         end
         connections = {}
         flagBinds = {}
+        for index = #themeBindings, 1, -1 do
+            local binding = themeBindings[index]
+            if not binding.instance or binding.instance == screen or binding.instance:IsDescendantOf(screen) then
+                table.remove(themeBindings, index)
+            end
+        end
+        if popupCleanup then
+            pcall(popupCleanup)
+            popupCleanup = nil
+        end
+        if Runtime[RUNTIME_KEY] == self then
+            Runtime[RUNTIME_KEY] = nil
+        end
         if screen then
             screen:Destroy()
         end
@@ -1150,11 +1237,11 @@ function Vision.Window(options)
         if oldTab then
             restorePage(oldTab)
             oldTab.Page.Visible = false
-            tween(oldTab.NavLabel, { TextColor3 = Theme.TextDim }, 0.14)
+            tween(oldTab.Nav, { TextColor3 = Theme.TextDim }, 0.14)
         end
 
         activeTab = tab
-        tween(tab.NavLabel, { TextColor3 = Theme.TextWhite }, 0.14)
+        tween(tab.Nav, { TextColor3 = Theme.TextWhite }, 0.14)
         task.defer(function()
             if tab.Nav and tab.Nav.Parent then
                 local target = tab.Nav.AbsolutePosition.X - tabHolder.AbsolutePosition.X - 32
@@ -1195,7 +1282,7 @@ function Vision.Window(options)
             local entries = byGroup[group.Box]
             if entries then
                 task.delay(0.02 + index * 0.03, function()
-                    if switchGeneration ~= generation or not tab.ActiveTweens then
+                    if destroyed or switchGeneration ~= generation or not tab.ActiveTweens then
                         return
                     end
                     for _, entry in ipairs(entries) do
@@ -1221,7 +1308,7 @@ function Vision.Window(options)
             end
         end
         task.delay(0.02 + #tab.Groups * 0.03 + 0.24, function()
-            if switchGeneration == generation then
+            if not destroyed and switchGeneration == generation then
                 tab.ActiveTweens = nil
                 tab.LastCache = nil
             end
@@ -1233,29 +1320,24 @@ function Vision.Window(options)
         local tabName = textValue(name, "Tab")
         local tabId = objectName(tabName, "Tab")
         local tab = { Name = tabName }
-        local nav = make("Frame", {
+        local nav = make("TextButton", {
             Name = "Nav_" .. tabId,
             Size = UDim2.new(0, 0, 1, 0),
             AutomaticSize = Enum.AutomaticSize.X,
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             LayoutOrder = #tabs + 1,
+            Text = tabName,
+            Font = FONT_MED,
+            TextSize = TEXT,
+            TextColor3 = Theme.TextDim,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            AutoButtonColor = false,
             Parent = tabList,
         })
         make("UIPadding", {
             PaddingLeft = UDim.new(0, 12),
             PaddingRight = UDim.new(0, 12),
-            Parent = nav,
-        })
-        local navLabel = make("TextLabel", {
-            Size = UDim2.new(0, 0, 1, 0),
-            AutomaticSize = Enum.AutomaticSize.X,
-            BackgroundTransparency = 1,
-            Font = FONT_MED,
-            Text = tabName,
-            TextSize = TEXT,
-            TextColor3 = Theme.TextDim,
-            TextXAlignment = Enum.TextXAlignment.Center,
             Parent = nav,
         })
 
@@ -1305,7 +1387,6 @@ function Vision.Window(options)
 
         tab.Page = page
         tab.Nav = nav
-        tab.NavLabel = navLabel
         tab.ColL = left
         tab.ColR = right
         tab.Groups = {}
@@ -1317,12 +1398,12 @@ function Vision.Window(options)
         end)
         nav.MouseEnter:Connect(function()
             if activeTab ~= tab then
-                tween(navLabel, { TextColor3 = Theme.TextBright }, 0.12)
+                tween(nav, { TextColor3 = Theme.TextBright }, 0.12)
             end
         end)
         nav.MouseLeave:Connect(function()
             if activeTab ~= tab then
-                tween(navLabel, { TextColor3 = Theme.TextDim }, 0.16)
+                tween(nav, { TextColor3 = Theme.TextDim }, 0.16)
             end
         end)
 
@@ -1363,7 +1444,6 @@ function Vision.Window(options)
                 Parent = box,
             })
             corner(header, 4)
-            local headerStroke = stroke(header, Theme.Accent, 0.45, 1)
             local headerTitle = make("TextLabel", {
                 Position = UDim2.new(0, 12, 0, 0),
                 Size = UDim2.new(1, -24, 1, 0),
@@ -1446,7 +1526,7 @@ function Vision.Window(options)
             setActiveTab(tab)
         end
 
-        tabs[#tabs + 1] = tab
+            tabs[#tabs + 1] = tab
         if not activeTab then
             setActiveTab(tab)
         end
@@ -1527,18 +1607,9 @@ function Vision.Window(options)
             options = options or {}
             local text = textValue(options.text or options.title, "Section")
             local row = baseRow(24)
-            local accent = make("Frame", {
-                AnchorPoint = Vector2.new(0, 0.5),
-                Position = UDim2.new(0, 0, 0.5, 0),
-                Size = UDim2.new(0, 3, 0, 14),
-                BackgroundColor3 = Theme.AccentBright,
-                BorderSizePixel = 0,
-                Parent = row,
-            })
-            corner(accent, 2)
             make("TextLabel", {
-                Position = UDim2.new(0, 11, 0, 0),
-                Size = UDim2.new(1, -11, 1, 0),
+                Position = UDim2.new(0, 0, 0, 0),
+                Size = UDim2.new(1, 0, 1, 0),
                 BackgroundTransparency = 1,
                 Font = FONT_BOLD,
                 Text = text,
@@ -1558,7 +1629,7 @@ function Vision.Window(options)
                 AnchorPoint = Vector2.new(0, 0.5),
                 Position = UDim2.new(0, 0, 0.5, 0),
                 Size = UDim2.new(1, 0, 0, 1),
-                BackgroundColor3 = options.color and typeof(options.color) == "Color3" and options.color or Color3.fromRGB(35, 48, 63),
+                BackgroundColor3 = options.color and typeof(options.color) == "Color3" and options.color or Theme.ControlBorder,
                 BorderSizePixel = 0,
                 Parent = row,
             })
@@ -1922,7 +1993,7 @@ function Vision.Window(options)
                 Parent = row,
             })
             corner(rail, 4)
-            stroke(rail, Color3.fromRGB(37, 51, 66), 0.35)
+            stroke(rail, Theme.ControlBorder, 0.35)
             local fill = make("Frame", {
                 Size = UDim2.new(0, 0, 1, 0),
                 BackgroundColor3 = Theme.Accent,
@@ -1934,14 +2005,27 @@ function Vision.Window(options)
             local knob = make("Frame", {
                 AnchorPoint = Vector2.new(0.5, 0.5),
                 Position = UDim2.new(0, 0, 0.5, 0),
-                Size = UDim2.new(0, 10, 0, 10),
+                Size = UDim2.new(0, 12, 0, 12),
                 BackgroundColor3 = Theme.TextWhite,
                 BorderSizePixel = 0,
                 ZIndex = 3,
                 Parent = rail,
             })
-            corner(knob, 5)
+            corner(knob, 6)
             stroke(knob, Theme.Accent, 0, 1)
+            local sliderHitbox = make("TextButton", {
+                Name = "SliderHitbox",
+                Position = UDim2.new(0, -6, 0, -8),
+                Size = UDim2.new(1, 12, 1, 16),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                Text = "",
+                AutoButtonColor = false,
+                Active = true,
+                Selectable = true,
+                ZIndex = 4,
+                Parent = rail,
+            })
             local function format(valueToFormat)
                 local result
                 if decimals > 0 then
@@ -1957,16 +2041,6 @@ function Vision.Window(options)
                 fill.Size = UDim2.new(alpha, 0, 1, 0)
                 knob.Position = UDim2.new(alpha, 0, 0.5, 0)
             end
-            row.MouseEnter:Connect(function()
-                tween(label, { TextColor3 = Theme.TextWhite }, 0.12)
-                tween(valueLabel, { TextColor3 = Theme.AccentBright }, 0.12)
-                tween(fill, { BackgroundColor3 = Theme.AccentBright }, 0.12)
-            end)
-            row.MouseLeave:Connect(function()
-                tween(label, { TextColor3 = Theme.TextBright }, 0.16)
-                tween(valueLabel, { TextColor3 = Theme.TextBright }, 0.16)
-                tween(fill, { BackgroundColor3 = Theme.Accent }, 0.16)
-            end)
             local function set(nextValue, silent)
                 nextValue = tonumber(nextValue)
                 if not nextValue then return end
@@ -1991,24 +2065,63 @@ function Vision.Window(options)
                 )
                 set(min + alpha * (max - min))
             end
-            row.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            sliderHitbox.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
                     setFromX(input.Position.X)
+                    tween(fill, { BackgroundColor3 = Theme.AccentBright }, 0.1)
+                    tween(knob, { Size = UDim2.new(0, 14, 0, 14) }, 0.1, Enum.EasingStyle.Quint)
+                end
+            end)
+            sliderHitbox.MouseEnter:Connect(function()
+                tween(fill, { BackgroundColor3 = Theme.AccentBright }, 0.12)
+                tween(knob, { Size = UDim2.new(0, 14, 0, 14) }, 0.12, Enum.EasingStyle.Quint)
+            end)
+            sliderHitbox.MouseLeave:Connect(function()
+                if not dragging then
+                    tween(fill, { BackgroundColor3 = Theme.Accent }, 0.16)
+                    tween(knob, { Size = UDim2.new(0, 12, 0, 12) }, 0.16, Enum.EasingStyle.Quint)
                 end
             end)
             track(UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = false
+                    tween(fill, { BackgroundColor3 = Theme.Accent }, 0.14)
+                    tween(knob, { Size = UDim2.new(0, 12, 0, 12) }, 0.14, Enum.EasingStyle.Quint)
+                end
             end))
             track(UserInputService.InputChanged:Connect(function(input)
-                if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+                    or input.UserInputType == Enum.UserInputType.Touch) then
                     setFromX(input.Position.X)
                 end
             end))
+            sliderHitbox.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.Keyboard then
+                    if input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.Down then
+                        set(value - step)
+                    elseif input.KeyCode == Enum.KeyCode.Right or input.KeyCode == Enum.KeyCode.Up then
+                        set(value + step)
+                    elseif input.KeyCode == Enum.KeyCode.Home then
+                        set(min)
+                    elseif input.KeyCode == Enum.KeyCode.End then
+                        set(max)
+                    end
+                end
+            end)
             paint()
             if options.flag then Vision.Flags[options.flag] = value end
             bindFlag(options.flag, function(v) set(v, false) end, function() return value end)
-            return { Row = row, Set = set, Get = function() return value end }
+            return {
+                Row = row,
+                Set = set,
+                Get = function() return value end,
+                GetMin = function() return min end,
+                GetMax = function() return max end,
+                GetStep = function() return step end,
+            }
         end
 
         function group.Dropdown(options)
@@ -2765,6 +2878,7 @@ function Vision.Window(options)
         return names
     end
 
+    Runtime[RUNTIME_KEY] = self
     self.Flags = Vision.Flags
     self.Window = win
     self.Theme = Theme
