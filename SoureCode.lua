@@ -903,6 +903,16 @@ function Vision.Window(options)
         Parent = tabList,
     })
 
+    make("Frame", {
+        Name = "TopbarDivider",
+        Position = UDim2.new(0, MARGIN, 0, TOPBAR_H),
+        Size = UDim2.new(1, -MARGIN * 2, 0, 1),
+        BackgroundColor3 = Theme.ControlBorder,
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        Parent = win,
+    })
+
     local content = make("Frame", {
         Name = "Content",
         Position = UDim2.new(0, 0, 0, TOPBAR_H),
@@ -919,6 +929,15 @@ function Vision.Window(options)
         Size = UDim2.new(1, 0, 0, FOOTER_H),
         BackgroundTransparency = 1,
         Parent = win,
+    })
+    make("Frame", {
+        Name = "FooterDivider",
+        Position = UDim2.new(0, MARGIN, 0, 0),
+        Size = UDim2.new(1, -MARGIN * 2, 0, 1),
+        BackgroundColor3 = Theme.ControlBorder,
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        Parent = footer,
     })
     make("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
@@ -1131,14 +1150,10 @@ function Vision.Window(options)
         if oldTab then
             restorePage(oldTab)
             oldTab.Page.Visible = false
-            tween(oldTab.Nav, { BackgroundColor3 = Theme.ControlBg, BackgroundTransparency = 1 }, 0.14)
-            tween(oldTab.NavStroke, { Color = Theme.ControlBorder, Transparency = 0.65 }, 0.14)
             tween(oldTab.NavLabel, { TextColor3 = Theme.TextDim }, 0.14)
         end
 
         activeTab = tab
-        tween(tab.Nav, { BackgroundColor3 = Theme.AccentDeep, BackgroundTransparency = 0.1 }, 0.14)
-        tween(tab.NavStroke, { Color = Theme.Accent, Transparency = 0.05 }, 0.14)
         tween(tab.NavLabel, { TextColor3 = Theme.TextWhite }, 0.14)
         task.defer(function()
             if tab.Nav and tab.Nav.Parent then
@@ -1222,17 +1237,10 @@ function Vision.Window(options)
             Name = "Nav_" .. tabId,
             Size = UDim2.new(0, 0, 1, 0),
             AutomaticSize = Enum.AutomaticSize.X,
-            BackgroundColor3 = Theme.ControlBg,
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             LayoutOrder = #tabs + 1,
             Parent = tabList,
-        })
-        corner(nav, 5)
-        local navStroke = stroke(nav, Theme.ControlBorder, 0.65, 1)
-        local navScale = make("UIScale", {
-            Scale = 1,
-            Parent = nav,
         })
         make("UIPadding", {
             PaddingLeft = UDim.new(0, 12),
@@ -1297,7 +1305,6 @@ function Vision.Window(options)
 
         tab.Page = page
         tab.Nav = nav
-        tab.NavStroke = navStroke
         tab.NavLabel = navLabel
         tab.ColL = left
         tab.ColR = right
@@ -1309,18 +1316,12 @@ function Vision.Window(options)
             end
         end)
         nav.MouseEnter:Connect(function()
-            tween(navScale, { Scale = 1.035 }, 0.14, Enum.EasingStyle.Quint)
             if activeTab ~= tab then
-                tween(nav, { BackgroundColor3 = Theme.ControlHover, BackgroundTransparency = 0.15 }, 0.12)
-                tween(navStroke, { Color = Theme.ControlBorder, Transparency = 0.2 }, 0.12)
                 tween(navLabel, { TextColor3 = Theme.TextBright }, 0.12)
             end
         end)
         nav.MouseLeave:Connect(function()
-            tween(navScale, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
             if activeTab ~= tab then
-                tween(nav, { BackgroundColor3 = Theme.ControlBg, BackgroundTransparency = 1 }, 0.16)
-                tween(navStroke, { Color = Theme.ControlBorder, Transparency = 0.65 }, 0.16)
                 tween(navLabel, { TextColor3 = Theme.TextDim }, 0.16)
             end
         end)
